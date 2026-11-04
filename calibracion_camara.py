@@ -29,10 +29,6 @@ for path in imgs_path:
         print(f'No se pudo cargar {path.name}')
         continue
 
-    cv2.imshow("Imagen", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     size = (gray.shape[1], gray.shape[0])
     if image_size is not None and size != image_size:
@@ -64,9 +60,14 @@ extrinsics = [
 ]
 
 print(f'Fotos válidas: {len(valid_corners)} de {len(imgs_path)}')
-print('Intrínsecos (K):\n', intrinsics)
-print('Coeficientes de distorsión:\n', dist_coeffs)
-print('Error RMS:', rms)
-for path, extrinsic in zip(valid_paths, extrinsics):
-    print(f'Extrínsecos {path.name}:\n', extrinsic)
+print('\nIntrínsecos (K):\n', intrinsics)
+print('\nCoeficientes de distorsión:\n', dist_coeffs)
+print('\nError RMS:', rms)
+
+bool_extinse = input('¿Desea imprimir los extrínsecos? (s/n): ')
+if bool_extinse.lower() == 's':
+    for path, extrinsic in zip(valid_paths, extrinsics):
+        print(f'Extrínsecos {path.name}:\n', extrinsic)
+else:
+    pass
 
