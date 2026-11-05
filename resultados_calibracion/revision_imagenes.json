@@ -1,0 +1,128 @@
+[
+  {
+    "imagen": "foto_calibracion_00.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_01.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_02.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_03.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_04.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_05.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_06.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_07.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_08.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_09.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_10.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_11.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_12.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  },
+  {
+    "imagen": "foto_calibracion_13.jpg",
+    "valida": true,
+    "resolucion": [
+      1280,
+      720
+    ],
+    "esquinas": 54
+  }
+]
