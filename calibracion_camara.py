@@ -21,6 +21,8 @@ valid_corners = []
 valid_chessboard_points = []
 valid_paths = []
 image_size = None
+detecciones_dir = base_dir / 'resultados_calibracion' / 'detecciones'
+detecciones_dir.mkdir(parents=True, exist_ok=True)
 
 for path in imgs_path:
 
@@ -43,6 +45,9 @@ for path in imgs_path:
         )
         valid_paths.append(path)
         image_size = size
+        # Guardamos la foto con las esquinas detectadas dibujadas.
+        cv2.drawChessboardCorners(img, chessboard_shape, refined, res)
+        cv2.imwrite(str(detecciones_dir / path.name), img)
     else:
         print(f'No se ha detectado el tablero en {path.name}')
 
