@@ -53,6 +53,9 @@ rms, intrinsics, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
     valid_chessboard_points, valid_corners, image_size, None, None
 )
 
+#PARA GUARDAR LOS PARÁMETROS DE CALIBRACIÓN EN UN ARCHIVO .npz, Y NO TENER QUE CALIBRAR CADA VEZ QUE EJECUTEMOS EL PROGRAMA
+np.savez(base_dir / 'calibracion.npz', K=intrinsics, dist=dist_coeffs)
+
 # Extrínsecos [R | t], uno por foto, relativos al tablero.
 extrinsics = [
     np.hstack((cv2.Rodrigues(rvec)[0], tvec))
@@ -68,6 +71,3 @@ bool_extinse = input('¿Desea imprimir los extrínsecos? (s/n): ')
 if bool_extinse.lower() == 's':
     for path, extrinsic in zip(valid_paths, extrinsics):
         print(f'Extrínsecos {path.name}:\n', extrinsic)
-else:
-    pass
-
