@@ -64,6 +64,9 @@ print('\nIntrínsecos (K):\n', intrinsics)
 print('\nCoeficientes de distorsión:\n', dist_coeffs)
 print('\nError RMS:', rms)
 
+# Guardamos K y la distorsión para que el programa principal los lea sin recalibrar.
+np.savez(base_dir / 'resultados_calibracion' / 'calibracion.npz', K=intrinsics, dist=dist_coeffs)
+
 bool_extinse = input('¿Desea imprimir los extrínsecos? (s/n): ')
 if bool_extinse.lower() == 's':
     for path, extrinsic in zip(valid_paths, extrinsics):
