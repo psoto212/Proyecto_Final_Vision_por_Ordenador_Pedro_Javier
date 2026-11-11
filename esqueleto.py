@@ -27,8 +27,8 @@ def main(camera_index=0, width=1280, height=720):
     t_anterior = time.perf_counter()    #Da la hora en segundos con decimales, de alta precisión
     fps = 0
 
-    #Control de estado: en qué pantalla estamos. Puede ser 'seguridad', 'juego' o 'resultado'
-    estado = "resultado"
+    # Control de estado: en qué pantalla estamos. Puede ser 'seguridad', 'juego' o 'resultado'
+    estado = "seguridad"
 
     try:
         while True:
@@ -58,7 +58,7 @@ def main(camera_index=0, width=1280, height=720):
             cv2.rectangle(frame, (x, y), esquina, (0, 0, 0), 3)          # borde negro
             cv2.putText(frame, texto, (x + margen, y + margen + alto), letra, tamano, (0, 150, 0), grosor)
 
-            #Imprime en pantalla según el estado de juego
+            # Imprime en pantalla según el estado de juego
             if estado == 'seguridad':
                 texto = "PANTALLA DE SEGURIDAD: Introduce la contraseña"
             elif estado == "juego":
@@ -74,7 +74,18 @@ def main(camera_index=0, width=1280, height=720):
 
             # Wait 1 ms for a key; exit with 'q' or ESC
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:
+
+            # Máquina de estados
+            # Con la tecla 'n' pasamos a la siguiente pantalla
+            if key == ord('n'):
+                if estado == 'seguridad':
+                    estado = 'juego'
+                elif estado == 'juego':
+                    estado = 'resultado'
+                elif estado == 'resultado':
+                    estado = 'seguridad'
+
+            elif key == ord('q') or key == 27:
                 break
 
     except KeyboardInterrupt:
