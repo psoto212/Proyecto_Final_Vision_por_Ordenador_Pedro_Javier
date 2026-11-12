@@ -4,7 +4,7 @@ from pathlib import Path
 
 ## CARGAMOS LAS IMÁGENES Y DEFINIMOS LOS PARÁMETROS DE LA CALIBRACIÓN
 base_dir = Path(__file__).resolve().parent
-imgs_path = sorted((base_dir.parent / 'Fotos Calibracion Camara').glob('*.jpg'))
+imgs_path = sorted((base_dir / 'fotos_calibracion').glob('*.jpg'))
 chessboard_shape = (9, 6)  # Esquinas interiores de nuestro tablero.
 length = 23  # Longitud de cada cuadro del tablero en milímetros.
 
