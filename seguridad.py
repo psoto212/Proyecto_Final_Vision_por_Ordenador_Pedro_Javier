@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import time
+from pathlib import Path
 
 # Color de la piel: Usamos la escala YCrCb, que trata la luminancia y el color por separado. Esto hace que sea más fácil separar la piel del fondo.
 # (Brillo, Cantidad de rojo, Cantidad de azul)
@@ -15,8 +16,27 @@ RECUADRO = (850, 150, 1200, 550)
 SECUENCIA = [5, 1, 2, 5]
 TIEMPO_MANTENER = 1.5  # segundos
 
-# Lista de seguimiento
-memoria = []
+# Imágenes de los candados (se cargan una sola vez al arrancar)
+CARPETA_ASSETS = Path(__file__).resolve().parent / 'assets'
+
+
+def cargar_png(nombre, alto):
+    # Lee el PNG con su transparencia y lo reduce a 'alto' píxeles sin deformarlo
+    png = cv2.imread(str(CARPETA_ASSETS / nombre), cv2.IMREAD_UNCHANGED)
+    ancho = int(png.shape[1] * alto / png.shape[0])
+    return cv2.resize(png, (ancho, alto), interpolation=cv2.INTER_AREA)
+
+
+def pegar_png(fondo, png, x, y):
+    # Pega el PNG en el fondo con su esquina de arriba a la izquierda en (x, y), respetando la transparencia
+    h, w = png.shape[:2]
+    zona = fondo[y:y + h, x:x + w]
+    alfa = png[:, :, 3:] / 255.0
+    zona[:] = (png[:, :, :3] * alfa + zona * (1 - alfa)).astype(np.uint8)
+
+
+CANDADO_CERRADO = cargar_png('candado_cerrado.png', 120)
+CANDADO_ABIERTO = cargar_png('candado_abierto.png', 120)
 
 def contar_dedos(mascara):
     # 1. La MANO = la mancha blanca más grande. Buscamos los contornos de la máscara y nos quedamos con el más grande.
@@ -126,6 +146,7 @@ if __name__ == '__main__':
     x1, y1, x2, y2 = RECUADRO
 
     contra = Contrasena(SECUENCIA)
+    desbloqueado = False
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -145,12 +166,20 @@ if __name__ == '__main__':
         resultado = contra.actualizar(dedos)
         if resultado is not None:
             print(resultado, contra.memoria)
+        if resultado == 'correcto':
+            desbloqueado = True
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
         if dedos is not None:
             cv2.circle(trozo, centro, radio, (0, 255, 255), 2)       # el círculo
             cv2.circle(trozo, centro, 5, (0, 0, 255), -1)            # el centro de la palma
             cv2.putText(frame, str(dedos), (x1, y1 - 15), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
+
+        # Candado arriba a la derecha: cerrado hasta meter bien la contraseña
+        if desbloqueado:
+            pegar_png(frame, CANDADO_ABIERTO, 1140, 15)
+        else:
+            pegar_png(frame, CANDADO_CERRADO, 1140, 15)
 
         cv2.imshow('Seguridad', frame)
         cv2.imshow('Mascara recuadro', mascara)
