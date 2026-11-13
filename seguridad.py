@@ -1,7 +1,7 @@
 "Bloque de seguridad: contar dedos dentro del recuadro"
 import cv2
 import numpy as np
-from queue import Queue
+import time
 
 
 # Color de la piel: Usamos la escala YCrCb, que trata la luminancia y el color por separado. Esto hace que sea más fácil separar la piel del fondo.
@@ -13,10 +13,11 @@ PIEL_ALTO = np.array([255, 173, 127])
 RECUADRO = (850, 150, 1200, 550)
 
 # Secuencia
-SECUENCIA = [5, 2, 3, 5]
+SECUENCIA = [5, 1, 2, 5]
+TIEMPO_MANTENER = 1.5  # segundos
 
-# Cola de seguimiento
-queue = Queue(maxsize=len(SECUENCIA))
+# Lista de seguimiento
+memoria = []
 
 def contar_dedos(mascara):
     # 1. La MANO = la mancha blanca más grande. Buscamos los contornos de la máscara y nos quedamos con el más grande.
@@ -63,6 +64,61 @@ def contar_dedos(mascara):
             largo = 0
     return dedos, centro, radio
 
+class Contrasena:
+    def __init__(self, secuencia):
+        self.secuencia = secuencia
+        self.memoria=[]
+        self.candidato=None
+        self.tiempo_inicio=None
+        self.mano_fuera=True
+
+    def actualizar(self, dedos):
+        ahora = time.perf_counter()
+
+        # 1. Sin mano: apuntamos que ha salido (da permiso para el siguiente número)
+        if dedos is None:
+            self.mano_fuera = True
+            self.candidato = None
+            return None
+
+        # 2. Hay mano, pero no la has sacado desde el último número: ignoramos
+        if not self.mano_fuera:
+            return None
+
+        # 3. Número distinto al de antes: empezamos a contar el segundo desde cero
+        if dedos != self.candidato:
+            self.candidato = dedos
+            self.t_inicio = ahora
+            return None
+
+        # 4. Mismo número, pero todavía no ha pasado el segundo
+        if ahora - self.t_inicio < TIEMPO_MANTENER:
+            return None
+
+        # 5. Número aceptado: a partir de aquí hay que sacar la mano para el siguiente
+        self.mano_fuera = False
+        self.candidato = None
+
+        if dedos == 0:                                       # puño: se borra todo
+            self.memoria = []
+            return 'reinicio'
+
+        if dedos == self.secuencia[len(self.memoria)]:       # es el que tocaba
+            self.memoria.append(dedos)
+            if len(self.memoria) == len(self.secuencia):     # ya están todos
+                self.memoria = []
+                return 'correcto'
+            return 'aceptado'
+
+        self.memoria = []                                    # no es el que tocaba
+        return 'fallo'
+
+    def progreso(self):
+        # De 0 a 1: cuánto llevas aguantado el número actual (para la barrita)
+        if self.candidato is None:
+            return 0
+        return min((time.perf_counter() - self.t_inicio) / TIEMPO_MANTENER, 1)
+        
 # Prueba: solo se ejecuta si lanzas este archivo
 if __name__ == '__main__':
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
@@ -70,7 +126,7 @@ if __name__ == '__main__':
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     x1, y1, x2, y2 = RECUADRO
 
-    ant = None
+    contra = Contrasena(SECUENCIA)
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -87,18 +143,9 @@ if __name__ == '__main__':
 
         dedos, centro, radio = contar_dedos(mascara)
 
-        if ant is None or dedos != ant:
-            
-            queue.enqueue(dedos)
-
-            if queue.full():
-                if queue.get() == SECUENCIA:
-                    print("¡Secuencia correcta!")
-                    queue.clear()
-                else:
-                    queue.dequeue()
-
-            ant = dedos
+        resultado = contra.actualizar(dedos)
+        if resultado is not None:
+            print(resultado, contra.memoria)
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
         if dedos is not None:
