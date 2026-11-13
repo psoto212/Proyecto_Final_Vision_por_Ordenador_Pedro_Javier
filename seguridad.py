@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import time
 
-
 # Color de la piel: Usamos la escala YCrCb, que trata la luminancia y el color por separado. Esto hace que sea más fácil separar la piel del fondo.
 # (Brillo, Cantidad de rojo, Cantidad de azul)
 PIEL_BAJO = np.array([0, 133, 77])
