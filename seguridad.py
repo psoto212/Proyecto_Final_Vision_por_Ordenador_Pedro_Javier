@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import time
 from pathlib import Path
+from collections import deque
 
 # Color de la piel: Usamos la escala YCrCb, que trata la luminancia y el color por separado. Esto hace que sea más fácil separar la piel del fondo.
 # (Brillo, Cantidad de rojo, Cantidad de azul)
@@ -14,7 +15,9 @@ RECUADRO = (850, 150, 1200, 550)
 
 # Secuencia
 SECUENCIA = [5, 1, 2, 5]
-TIEMPO_MANTENER = 1.5  # segundos
+TIEMPO_MANTENER = 1  # segundos
+TIEMPO_CAMBIO = 5    # segundos de puño (con el candado abierto) para poner una contraseña nueva
+N_VOTOS = 10         # imágenes que se usan para votar el número de dedos (quita los saltos sueltos)
 
 # Imágenes de los candados (se cargan una sola vez al arrancar)
 CARPETA_ASSETS = Path(__file__).resolve().parent / 'assets'
@@ -47,7 +50,9 @@ def contar_dedos(mascara):
     mano = max(contornos, key=cv2.contourArea)
     if cv2.contourArea(mano) < 3000:          # Umbral: demasiado pequeña para ser una mano
         return None, None, None
-    
+    if cv2.contourArea(mano) > 0.9 * mascara.size:   # casi todo el recuadro es "piel": no es una mano (fondo o luz)
+        return None, None, None
+
     solo_mano = np.zeros_like(mascara)  # Transformamos la máscara a una imagen en blanco y negro donde solo está la mano
     cv2.drawContours(solo_mano, [mano], -1, 255, -1)
 
@@ -86,22 +91,38 @@ def contar_dedos(mascara):
 class Contrasena:
     def __init__(self, secuencia):
         self.secuencia = secuencia
-        self.memoria=[]
-        self.candidato=None
-        self.tiempo_inicio=None
-        self.mano_fuera=True
+        self.memoria = []            # números metidos bien (o los de la contraseña nueva)
+        self.candidato = None        # número que estás aguantando
+        self.t_inicio = 0            # desde cuándo lo aguantas
+        self.ultimo = None           # último número aceptado (el siguiente tiene que ser distinto)
+        self.desbloqueado = False    # ¿se ha metido bien la contraseña?
+        self.modo = 'comprobar'      # 'comprobar' = meter la contraseña, 'nueva' = poner una nueva
+        self.t_puno = None           # desde cuándo tienes el puño cerrado
 
     def actualizar(self, dedos):
         ahora = time.perf_counter()
 
-        # 1. Sin mano: apuntamos que ha salido (da permiso para el siguiente número)
+        # 1. Sin mano: olvidamos el número que aguantabas y el último aceptado
         if dedos is None:
-            self.mano_fuera = True
+            self.ultimo = None
             self.candidato = None
+            self.t_puno = None
             return None
 
-        # 2. Hay mano, pero no la has sacado desde el último número: ignoramos
-        if not self.mano_fuera:
+        # Puño largo: con el candado abierto, 5 s de puño pasan al modo de contraseña nueva
+        if dedos == 0:
+            if self.t_puno is None:
+                self.t_puno = ahora
+            elif self.desbloqueado and self.modo == 'comprobar' and ahora - self.t_puno >= TIEMPO_CAMBIO:
+                self.modo = 'nueva'
+                self.memoria = []
+                return 'nueva'
+        else:
+            self.t_puno = None
+
+        # 2. Hay mano, pero los dedos son los mismos que antes: ignoramos
+        if dedos == self.ultimo:
+            self.candidato = None
             return None
 
         # 3. Número distinto al de antes: empezamos a contar el segundo desde cero
@@ -114,18 +135,31 @@ class Contrasena:
         if ahora - self.t_inicio < TIEMPO_MANTENER:
             return None
 
-        # 5. Número aceptado: a partir de aquí hay que sacar la mano para el siguiente
-        self.mano_fuera = False
+        # 5. Número aceptado: el siguiente tiene que ser distinto (o sacar la mano)
+        self.ultimo = dedos
         self.candidato = None
 
         if dedos == 0:                                       # puño: se borra todo
             self.memoria = []
             return 'reinicio'
 
-        if dedos == self.secuencia[len(self.memoria)]:       # es el que tocaba
+        # Modo contraseña nueva: guardamos los números hasta tener 4
+        if self.modo == 'nueva':
+            self.memoria.append(dedos)
+            if len(self.memoria) == 4:
+                self.secuencia = self.memoria
+                self.memoria = []
+                self.modo = 'comprobar'
+                self.desbloqueado = False                    # se cierra para probar la nueva
+                return 'cambiada'
+            return 'aceptado'
+
+        # Modo comprobar: ¿es el que tocaba?
+        if dedos == self.secuencia[len(self.memoria)]:
             self.memoria.append(dedos)
             if len(self.memoria) == len(self.secuencia):     # ya están todos
                 self.memoria = []
+                self.desbloqueado = True
                 return 'correcto'
             return 'aceptado'
 
@@ -137,6 +171,12 @@ class Contrasena:
         if self.candidato is None:
             return 0
         return min((time.perf_counter() - self.t_inicio) / TIEMPO_MANTENER, 1)
+
+    def progreso_puno(self):
+        # De 0 a 1: cuánto llevas de puño para cambiar la contraseña (solo con el candado abierto)
+        if self.t_puno is None or not self.desbloqueado or self.modo != 'comprobar':
+            return 0
+        return min((time.perf_counter() - self.t_puno) / TIEMPO_CAMBIO, 1)
         
 # Prueba: solo se ejecuta si lanzas este archivo
 if __name__ == '__main__':
@@ -146,7 +186,8 @@ if __name__ == '__main__':
     x1, y1, x2, y2 = RECUADRO
 
     contra = Contrasena(SECUENCIA)
-    desbloqueado = False
+    mensaje, t_mensaje = '', 0        # último aviso (ACEPTADO, FALLO...) y cuándo salió
+    votos = deque(maxlen=N_VOTOS)     # conteos de las últimas imágenes (los más viejos se van solos)
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -155,7 +196,8 @@ if __name__ == '__main__':
 
         # Solo miramos dentro del recuadro
         trozo = frame[y1:y2, x1:x2]
-        ycrcb = cv2.cvtColor(trozo, cv2.COLOR_BGR2YCrCb)
+        suave = cv2.medianBlur(trozo, 5)      # filtro de mediana: quita píxeles sueltos sin emborronar los bordes
+        ycrcb = cv2.cvtColor(suave, cv2.COLOR_BGR2YCrCb)
         mascara = cv2.inRange(ycrcb, PIEL_BAJO, PIEL_ALTO)
         nucleo = np.ones((5, 5), np.uint8)
         mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, nucleo)
@@ -163,20 +205,48 @@ if __name__ == '__main__':
 
         dedos, centro, radio = contar_dedos(mascara)
 
+        # Votación: nos quedamos con el número que más se repite en las últimas imágenes
+        votos.append(dedos)
+        dedos = max(set(votos), key=votos.count)
+
         resultado = contra.actualizar(dedos)
         if resultado is not None:
-            print(resultado, contra.memoria)
-        if resultado == 'correcto':
-            desbloqueado = True
+            print(resultado, contra.memoria, contra.secuencia)
+            mensaje, t_mensaje = resultado.upper(), time.perf_counter()
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
-        if dedos is not None:
+        if dedos is not None and centro is not None:
             cv2.circle(trozo, centro, radio, (0, 255, 255), 2)       # el círculo
             cv2.circle(trozo, centro, 5, (0, 0, 255), -1)            # el centro de la palma
             cv2.putText(frame, str(dedos), (x1, y1 - 15), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
 
+        # Barrita debajo del recuadro: verde mientras aguantas un número, naranja mientras aguantas el puño para cambiar
+        if contra.progreso_puno() > 0:
+            lleno, color = int((x2 - x1) * contra.progreso_puno()), (0, 140, 255)
+        else:
+            lleno, color = int((x2 - x1) * contra.progreso()), (0, 255, 0)
+        cv2.rectangle(frame, (x1, y2 + 15), (x1 + lleno, y2 + 40), color, -1)
+        cv2.rectangle(frame, (x1, y2 + 15), (x2, y2 + 40), (255, 255, 255), 2)
+
+        # Números metidos hasta ahora, en grande (por ejemplo: 5 1 _ _)
+        huecos = [str(n) for n in contra.memoria] + ['_'] * (4 - len(contra.memoria))
+        cv2.putText(frame, ' '.join(huecos), (x1, y2 + 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 4)
+
+        # Aviso: el último resultado durante 1 s; si no, lo que toca hacer
+        if time.perf_counter() - t_mensaje < 1:
+            aviso = mensaje
+        elif dedos is not None and dedos == contra.ultimo and dedos != 0:
+            aviso = 'CAMBIA DE NUMERO'
+        elif contra.modo == 'nueva':
+            aviso = 'NUEVA CONTRASENA'
+        elif contra.desbloqueado:
+            aviso = 'PUNO 5 s: CAMBIAR'
+        else:
+            aviso = ''
+        cv2.putText(frame, aviso, (x1, y2 + 150), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 255), 3)
+
         # Candado arriba a la derecha: cerrado hasta meter bien la contraseña
-        if desbloqueado:
+        if contra.desbloqueado:
             pegar_png(frame, CANDADO_ABIERTO, 1140, 15)
         else:
             pegar_png(frame, CANDADO_CERRADO, 1140, 15)
