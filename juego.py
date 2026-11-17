@@ -58,11 +58,8 @@ def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
 
     return mejor_caras
 
-if __name__ == '__main__':
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
+def jugar(cap):
+    # Una partida entera (60 s) usando la cámara que ya está abierta
     t_juego = time.perf_counter()   # momento en que empieza la partida
     caras = nuevas_caras(1280, 720, 2)
     t_caras = time.perf_counter()   # momento en que salió la tanda actual
@@ -93,18 +90,24 @@ if __name__ == '__main__':
             pegar_png(frame, imagen, cara['x'], cara['y'])
 
         cv2.putText(frame, f'Tiempo: {DURACION_JUEGO - transcurrido:.0f}', (20, 50),
-        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
         cv2.imshow('Juego', frame)
         tecla = cv2.waitKey(1) & 0xFF
 
-        if tecla == ord(' '):        # ESPACIO: caras y sitios nuevos
-            caras = nuevas_caras(1280, 720, n_caras)
-        elif tecla == 13:            # ENTER: las caras pasan a golpeadas
+        if tecla == 13:              # ENTER: las caras pasan a golpeadas
             for cara in caras:
                 cara['golpeada'] = True
-        elif tecla == ord('q'):
+        elif tecla == ord('q'):      # q: terminar la partida antes
             break
 
+    cv2.destroyWindow('Juego')       # cerramos solo la ventana del juego (la cámara sigue abierta)
+
+# Prueba: solo se ejecuta si lanzas este archivo
+if __name__ == '__main__':
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    jugar(cap)
     cap.release()
     cv2.destroyAllWindows()
