@@ -8,7 +8,10 @@ import math
 
 CARPETA_JUEGO = Path(__file__).resolve().parent / 'fotos_juego'
 ALTO_CARA = 200     # alto en píxeles de cada cara en pantalla
-N_CARAS = 3         # cuántas caras salen a la vez
+
+DURACION_JUEGO = 60  # segundos que dura la partida
+TIEMPO_FASE = 20     # cada 20 s sale una cara más (1, luego 2, luego 3)
+
 TIEMPO_CARAS = 1.5  # segundos que dura cada tanda de caras
 INTENTOS = 20       # colocaciones al azar que probamos para quedarnos con la más separada
 
@@ -27,10 +30,10 @@ for i, ruta in enumerate(sorted((CARPETA_JUEGO / 'sin_fondo').glob('*.png'))):
     golpeada = cv2.resize(golpeada, (buena.shape[1], buena.shape[0]), interpolation=cv2.INTER_AREA)
     PERSONAJES[i] = (buena, golpeada)
 
-def nuevas_caras(ancho_pantalla, alto_pantalla):
+def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
     # Dividimos la pantalla en N_CARAS franjas (columnas), una para cada cara: así nunca se pisan
-    ancho_franja = ancho_pantalla // N_CARAS
-    personajes = random.sample(list(PERSONAJES), N_CARAS)
+    ancho_franja = ancho_pantalla // n_caras
+    personajes = random.sample(list(PERSONAJES), n_caras)
 
     # Probamos varias colocaciones al azar y nos quedamos con la que deja las caras más separadas
     mejor_caras, mejor_distancia = None, -1
@@ -60,7 +63,8 @@ if __name__ == '__main__':
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    caras = nuevas_caras(1280, 720)
+    t_juego = time.perf_counter()   # momento en que empieza la partida
+    caras = nuevas_caras(1280, 720, 2)
     t_caras = time.perf_counter()   # momento en que salió la tanda actual
 
     while True:
@@ -69,9 +73,17 @@ if __name__ == '__main__':
             break
         frame = cv2.flip(frame, 1)
 
+        # Cuánto llevamos de partida; a los 60 s se acaba
+        transcurrido = time.perf_counter() - t_juego
+        if transcurrido >= DURACION_JUEGO:
+            break
+
+        # Cada 20 s sale una cara más: 2, 3 y 4
+        n_caras = 2 + int(transcurrido // TIEMPO_FASE)
+
         # Si la tanda actual lleva 1,5 s en pantalla, sacamos caras nuevas
         if time.perf_counter() - t_caras >= TIEMPO_CARAS:
-            caras = nuevas_caras(1280, 720)
+            caras = nuevas_caras(1280, 720, n_caras)
             t_caras = time.perf_counter()
 
         # Pintamos cada cara: la golpeada si ya le han dado, la normal si no
@@ -80,11 +92,14 @@ if __name__ == '__main__':
             imagen = golpeada if cara['golpeada'] else buena
             pegar_png(frame, imagen, cara['x'], cara['y'])
 
+        cv2.putText(frame, f'Tiempo: {DURACION_JUEGO - transcurrido:.0f}', (20, 50),
+        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+
         cv2.imshow('Juego', frame)
         tecla = cv2.waitKey(1) & 0xFF
 
         if tecla == ord(' '):        # ESPACIO: caras y sitios nuevos
-            caras = nuevas_caras(1280, 720)
+            caras = nuevas_caras(1280, 720, n_caras)
         elif tecla == 13:            # ENTER: las caras pasan a golpeadas
             for cara in caras:
                 cara['golpeada'] = True
