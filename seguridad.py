@@ -19,6 +19,9 @@ TIEMPO_MANTENER = 1  # segundos
 TIEMPO_CAMBIO = 5    # segundos de puño (con el candado abierto) para poner una contraseña nueva
 N_VOTOS = 10         # imágenes que se usan para votar el número de dedos (quita los saltos sueltos)
 
+BOTON = (80, 400, 380, 560)   # x1, y1, x2, y2 del botón JUGAR (a la izquierda, lejos de la cara)
+TIEMPO_BOTON = 1              # segundos con la mano encima para pulsarlo
+
 # Imágenes de los candados (se cargan una sola vez al arrancar)
 CARPETA_ASSETS = Path(__file__).resolve().parent / 'assets'
 
@@ -188,6 +191,8 @@ class Contrasena:
         
 # Prueba: solo se ejecuta si lanzas este archivo
 if __name__ == '__main__':
+    from juego import jugar
+
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -196,6 +201,11 @@ if __name__ == '__main__':
     contra = Contrasena(SECUENCIA)
     mensaje, t_mensaje = '', 0        # último aviso (ACEPTADO, FALLO...) y cuándo salió
     votos = deque(maxlen=N_VOTOS)     # conteos de las últimas imágenes (los más viejos se van solos)
+    
+    t_boton = None                    # desde cuándo tienes la mano encima del botón
+
+    
+    
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -262,6 +272,33 @@ if __name__ == '__main__':
         cv2.imshow('Mascara recuadro', mascara)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+        # Botón JUGAR: solo con el candado abierto (y si no estás poniendo una contraseña nueva)
+        if contra.desbloqueado and contra.modo == 'comprobar':
+            bx1, by1, bx2, by2 = BOTON
+            zona = cv2.cvtColor(frame[by1:by2, bx1:bx2], cv2.COLOR_BGR2YCrCb)
+            piel = cv2.inRange(zona, PIEL_BAJO, PIEL_ALTO)
+            tapado = cv2.countNonZero(piel) / piel.size > 0.4   # ¿la mano tapa casi medio botón?
+
+            if not tapado:
+                t_boton = None
+            elif t_boton is None:
+                t_boton = time.perf_counter()
+            elif time.perf_counter() - t_boton >= TIEMPO_BOTON:
+                cv2.destroyAllWindows()         # quitamos las ventanas de seguridad
+                jugar(cap)                      # aquí se juega la partida entera (60 s)
+                contra.desbloqueado = False     # al volver, el candado está cerrado otra vez
+                t_boton = None
+                votos.clear()
+                continue
+
+            # Dibujo del botón: se va rellenando de verde desde abajo mientras tienes la mano encima
+            lleno = 0 if t_boton is None else min((time.perf_counter() - t_boton) / TIEMPO_BOTON, 1)
+            cv2.rectangle(frame, (bx1, by2 - int((by2 - by1) * lleno)), (bx2, by2), (0, 200, 0), -1)
+            cv2.rectangle(frame, (bx1, by1), (bx2, by2), (255, 255, 255), 3)
+            cv2.putText(frame, 'JUGAR', (bx1 + 50, by1 + 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 4)
+        else:
+            t_boton = None
 
     cap.release()
     cv2.destroyAllWindows()
