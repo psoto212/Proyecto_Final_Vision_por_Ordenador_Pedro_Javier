@@ -187,16 +187,10 @@ class Contrasena:
             return 0
         return min((time.perf_counter() - self.t_puno) / TIEMPO_CAMBIO, 1)
         
-# Prueba: solo se ejecuta si lanzas este archivo
-if __name__ == '__main__':
-    from juego import jugar
-
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+def pantalla_seguridad(cap, contra):
+    # Pantalla de la contraseña. Devuelve True si se pulsa JUGAR y False si se pulsa 'q' para salir
     x1, y1, x2, y2 = RECUADRO
 
-    contra = Contrasena(SECUENCIA)
     mensaje, t_mensaje = '', 0        # último aviso (ACEPTADO, FALLO...) y cuándo salió
     votos = deque(maxlen=N_VOTOS)     # conteos de las últimas imágenes (los más viejos se van solos)
     
@@ -206,7 +200,7 @@ if __name__ == '__main__':
 
     def raton(evento, x, y, flags, param):
         # OpenCV llama a esta función cada vez que haces algo con el ratón en la ventana
-        global clic
+        nonlocal clic
         bx1, by1, bx2, by2 = BOTON
         if evento == cv2.EVENT_LBUTTONDOWN and bx1 <= x <= bx2 and by1 <= y <= by2:
             clic = True               # clic izquierdo dentro del botón
@@ -292,13 +286,8 @@ if __name__ == '__main__':
             mano_lista = t_boton is not None and time.perf_counter() - t_boton >= TIEMPO_BOTON
             if mano_lista or clic:
                 cv2.destroyAllWindows()         # quitamos las ventanas de seguridad
-                jugar(cap)                      # aquí se juega la partida entera (60 s)
-                contra.desbloqueado = False     # al volver, el candado está cerrado otra vez
-                t_boton, clic = None, False
-                votos.clear()
-                cv2.namedWindow('Seguridad')                # la ventana se borró: la creamos otra vez
-                cv2.setMouseCallback('Seguridad', raton)    # y volvemos a escuchar el ratón
-                continue
+                contra.desbloqueado = False     # al volver del juego, el candado estará cerrado otra vez
+                return True                     # main.py se encarga de lanzar el juego
 
             # Dibujo del botón: se va rellenando de verde desde abajo mientras tienes la mano encima
             lleno = 0 if t_boton is None else min((time.perf_counter() - t_boton) / TIEMPO_BOTON, 1)
@@ -313,5 +302,14 @@ if __name__ == '__main__':
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    cap.release()
     cv2.destroyAllWindows()
+    return False
+
+
+# Prueba: solo se ejecuta si lanzas este archivo (solo la pantalla de seguridad, sin juego)
+if __name__ == '__main__':
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    print('JUGAR pulsado' if pantalla_seguridad(cap, Contrasena(SECUENCIA)) else 'Salir')
+    cap.release()

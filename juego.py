@@ -89,11 +89,15 @@ def jugar(cap):
             caras = nuevas_caras(1280, 720, n_caras)
             t_caras = time.perf_counter()
 
-        # Golpe: el centro del guante está dentro de una cara y el guante va rápido
-        if centro is not None and guante.velocidad > VELOCIDAD_GOLPE:
+        # Golpe: el recuadro del guante toca el recuadro (hitbox) de una cara y el guante va rápido.
+        # Basta con que se toquen un poco, no hace falta que el centro del guante caiga dentro
+        if recuadro is not None and guante.velocidad > VELOCIDAD_GOLPE:
+            gx, gy, gw, gh = recuadro
             for cara in caras:
                 alto, ancho = PERSONAJES[cara['num']][0].shape[:2]
-                if cara['x'] <= centro[0] <= cara['x'] + ancho and cara['y'] <= centro[1] <= cara['y'] + alto:
+                se_tocan = (gx < cara['x'] + ancho and cara['x'] < gx + gw and
+                            gy < cara['y'] + alto and cara['y'] < gy + gh)
+                if se_tocan:
                     cara['golpeada'] = True
 
         # Pintamos cada cara: la golpeada si ya le han dado, la normal si no
