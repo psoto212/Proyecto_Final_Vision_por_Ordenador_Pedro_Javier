@@ -59,34 +59,42 @@ def contar_dedos(mascara):
     # 2. Centro de la palma: Calculamos las distancias con el borde negro más cercano para cada pixel
     distancias = cv2.distanceTransform(solo_mano, cv2.DIST_L2, 5)
     _, radio_palma, _, centro = cv2.minMaxLoc(distancias)   # Calcula distancia y posición del pixel más interior (radio), y del más exterior (lo despreciamos)
-    radio = int(1.7 * radio_palma) # Usamos un circulo un poco más mayor que la palma, pero en donde corte los dedos
+    # Miramos con 3 círculos de distinto tamaño y nos quedamos con el que más dedos ve
+    # (cerca de la base los dedos se tocan; más arriba se separan)
+    mejor_dedos, mejor_radio = 0, int(1.7 * radio_palma)
+    for factor in (1.7, 2.0, 2.3):
+        radio = int(factor * radio_palma)
 
-    # La idea es dibujar un punto por cada grado del circulo: como un reloj con 360 minutos
-    # 3. Creación del circulo
-    angulos = np.radians(np.arange(360))
-    xs = (centro[0] + radio * np.cos(angulos)).astype(int)  # Coordenadas en x
-    ys = (centro[1] - radio * np.sin(angulos)).astype(int)  # Coordenadas en y
+        # La idea es dibujar un punto por cada grado del circulo: como un reloj con 360 minutos
+        # 3. Creación del circulo
+        angulos = np.radians(np.arange(360))
+        xs = (centro[0] + radio * np.cos(angulos)).astype(int)  # Coordenadas en x
+        ys = (centro[1] - radio * np.sin(angulos)).astype(int)  # Coordenadas en y
 
-    # 4. ¿Cada punto del círculo cae en la mano? (los que se salen de la imagen cuentan como negro)
-    alto, ancho = mascara.shape
-    dentro = (xs >= 0) & (xs < ancho) & (ys >= 0) & (ys < alto)
-    blanco = np.zeros(360, dtype=bool)
-    blanco[dentro] = solo_mano[ys[dentro], xs[dentro]] > 0
+        # 4. ¿Cada punto del círculo cae en la mano? (los que se salen de la imagen cuentan como negro)
+        alto, ancho = mascara.shape
+        dentro = (xs >= 0) & (xs < ancho) & (ys >= 0) & (ys < alto)
+        blanco = np.zeros(360, dtype=bool)
+        blanco[dentro] = solo_mano[ys[dentro], xs[dentro]] > 0
 
-    # 5. No miramos la parte de abajo, que es por donde entra la muñeca
-    blanco[225:315] = False
+        # 5. No miramos la parte de abajo, que es por donde entra la muñeca
+        blanco[225:315] = False
 
-    # 6. Contamos los trozos blancos seguidos (cada uno es un dedo)
-    blanco = np.roll(blanco, -270)    # empezamos a recorrer desde abajo
-    dedos, largo = 0, 0
-    for es_blanco in blanco:
-        if es_blanco:
-            largo += 1
-        else:
-            if largo >= 5:            # trozos de menos de 5 grados son ruido
-                dedos += 1
-            largo = 0
-    return dedos, centro, radio
+        # 6. Contamos los trozos blancos seguidos (cada uno es un dedo)
+        blanco = np.roll(blanco, -270)    # empezamos a recorrer desde abajo
+        dedos, largo = 0, 0
+        for es_blanco in blanco:
+            if es_blanco:
+                largo += 1
+            else:
+                if largo >= 5:            # trozos de menos de 5 grados son ruido
+                    dedos += 1
+                largo = 0
+
+        if dedos > mejor_dedos:
+            mejor_dedos, mejor_radio = dedos, radio
+
+    return mejor_dedos, centro, mejor_radio
 
 class Contrasena:
     def __init__(self, secuencia):
@@ -196,8 +204,7 @@ if __name__ == '__main__':
 
         # Solo miramos dentro del recuadro
         trozo = frame[y1:y2, x1:x2]
-        suave = cv2.medianBlur(trozo, 5)      # filtro de mediana: quita píxeles sueltos sin emborronar los bordes
-        ycrcb = cv2.cvtColor(suave, cv2.COLOR_BGR2YCrCb)
+        ycrcb = cv2.cvtColor(trozo, cv2.COLOR_BGR2YCrCb)
         mascara = cv2.inRange(ycrcb, PIEL_BAJO, PIEL_ALTO)
         nucleo = np.ones((5, 5), np.uint8)
         mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, nucleo)
