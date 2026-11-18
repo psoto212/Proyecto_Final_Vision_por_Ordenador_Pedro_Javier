@@ -19,6 +19,9 @@ TIEMPO_MANTENER = 1  # segundos
 TIEMPO_CAMBIO = 5    # segundos de puño (con el candado abierto) para poner una contraseña nueva
 N_VOTOS = 10         # imágenes que se usan para votar el número de dedos (quita los saltos sueltos)
 
+BOTON = (80, 400, 380, 560)   # x1, y1, x2, y2 del botón JUGAR (a la izquierda, lejos de la cara)
+TIEMPO_BOTON = 1              # segundos con la mano encima para pulsarlo
+
 # Imágenes de los candados (se cargan una sola vez al arrancar)
 CARPETA_ASSETS = Path(__file__).resolve().parent / 'assets'
 
@@ -29,14 +32,12 @@ def cargar_png(nombre, alto):
     ancho = int(png.shape[1] * alto / png.shape[0])
     return cv2.resize(png, (ancho, alto), interpolation=cv2.INTER_AREA)
 
-
 def pegar_png(fondo, png, x, y):
     # Pega el PNG en el fondo con su esquina de arriba a la izquierda en (x, y), respetando la transparencia
     h, w = png.shape[:2]
     zona = fondo[y:y + h, x:x + w]
     alfa = png[:, :, 3:] / 255.0
     zona[:] = (png[:, :, :3] * alfa + zona * (1 - alfa)).astype(np.uint8)
-
 
 CANDADO_CERRADO = cargar_png('candado_cerrado.png', 120)
 CANDADO_ABIERTO = cargar_png('candado_abierto.png', 120)
@@ -186,16 +187,27 @@ class Contrasena:
             return 0
         return min((time.perf_counter() - self.t_puno) / TIEMPO_CAMBIO, 1)
         
-# Prueba: solo se ejecuta si lanzas este archivo
-if __name__ == '__main__':
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+def pantalla_seguridad(cap, contra):
+    # Pantalla de la contraseña. Devuelve True si se pulsa JUGAR y False si se pulsa 'q' para salir
     x1, y1, x2, y2 = RECUADRO
 
-    contra = Contrasena(SECUENCIA)
     mensaje, t_mensaje = '', 0        # último aviso (ACEPTADO, FALLO...) y cuándo salió
     votos = deque(maxlen=N_VOTOS)     # conteos de las últimas imágenes (los más viejos se van solos)
+    
+    t_boton = None                    # desde cuándo tienes la mano encima del botón
+
+    clic = False                      # ¿se ha hecho clic en el botón?
+
+    def raton(evento, x, y, flags, param):
+        # OpenCV llama a esta función cada vez que haces algo con el ratón en la ventana
+        nonlocal clic
+        bx1, by1, bx2, by2 = BOTON
+        if evento == cv2.EVENT_LBUTTONDOWN and bx1 <= x <= bx2 and by1 <= y <= by2:
+            clic = True               # clic izquierdo dentro del botón
+
+    cv2.namedWindow('Seguridad')
+    cv2.setMouseCallback('Seguridad', raton)
+    
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -258,10 +270,46 @@ if __name__ == '__main__':
         else:
             pegar_png(frame, CANDADO_CERRADO, 1140, 15)
 
+        # Botón JUGAR: solo con el candado abierto (y si no estás poniendo una contraseña nueva)
+        if contra.desbloqueado and contra.modo == 'comprobar':
+            bx1, by1, bx2, by2 = BOTON
+            zona = cv2.cvtColor(frame[by1:by2, bx1:bx2], cv2.COLOR_BGR2YCrCb)
+            piel = cv2.inRange(zona, PIEL_BAJO, PIEL_ALTO)
+            tapado = cv2.countNonZero(piel) / piel.size > 0.4   # ¿la mano tapa casi medio botón?
+
+            if not tapado:
+                t_boton = None
+            elif t_boton is None:
+                t_boton = time.perf_counter()
+
+            # Se pulsa si llevas 1 s con la mano encima O si has hecho clic con el ratón
+            mano_lista = t_boton is not None and time.perf_counter() - t_boton >= TIEMPO_BOTON
+            if mano_lista or clic:
+                cv2.destroyAllWindows()         # quitamos las ventanas de seguridad
+                contra.desbloqueado = False     # al volver del juego, el candado estará cerrado otra vez
+                return True                     # main.py se encarga de lanzar el juego
+
+            # Dibujo del botón: se va rellenando de verde desde abajo mientras tienes la mano encima
+            lleno = 0 if t_boton is None else min((time.perf_counter() - t_boton) / TIEMPO_BOTON, 1)
+            cv2.rectangle(frame, (bx1, by2 - int((by2 - by1) * lleno)), (bx2, by2), (0, 200, 0), -1)
+            cv2.rectangle(frame, (bx1, by1), (bx2, by2), (255, 255, 255), 3)
+            cv2.putText(frame, 'JUGAR', (bx1 + 50, by1 + 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 4)
+        else:
+            t_boton, clic = None, False         # con el candado cerrado, los clics no cuentan
+
         cv2.imshow('Seguridad', frame)
         cv2.imshow('Mascara recuadro', mascara)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    cap.release()
     cv2.destroyAllWindows()
+    return False
+
+
+# Prueba: solo se ejecuta si lanzas este archivo (solo la pantalla de seguridad, sin juego)
+if __name__ == '__main__':
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    print('JUGAR pulsado' if pantalla_seguridad(cap, Contrasena(SECUENCIA)) else 'Salir')
+    cap.release()
