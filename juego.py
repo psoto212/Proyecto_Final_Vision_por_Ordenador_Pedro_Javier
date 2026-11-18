@@ -3,6 +3,7 @@ import cv2
 import random
 from pathlib import Path
 from seguridad import pegar_png
+from deteccion_guante import Guante
 import time
 import math
 
@@ -14,6 +15,7 @@ TIEMPO_FASE = 20     # cada 20 s sale una cara más (1, luego 2, luego 3)
 
 TIEMPO_CARAS = 1.5  # segundos que dura cada tanda de caras
 INTENTOS = 20       # colocaciones al azar que probamos para quedarnos con la más separada
+VELOCIDAD_GOLPE = 700  # px/s: el guante tiene que ir al menos así de rápido para que cuente como puñetazo
 
 def cargar_cara(ruta):
     # Lee el PNG con transparencia y lo deja con ALTO_CARA de alto sin deformarlo
@@ -58,20 +60,21 @@ def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
 
     return mejor_caras
 
-if __name__ == '__main__':
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
+def jugar(cap):
+    # Una partida entera (60 s) usando la cámara que ya está abierta
     t_juego = time.perf_counter()   # momento en que empieza la partida
     caras = nuevas_caras(1280, 720, 2)
     t_caras = time.perf_counter()   # momento en que salió la tanda actual
+    guante = Guante()
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
         frame = cv2.flip(frame, 1)
+
+        # Buscamos el guante ANTES de pintar las caras (si no, el azul de alguna foto podría confundirlo)
+        recuadro, centro, _ = guante.actualizar(frame)
 
         # Cuánto llevamos de partida; a los 60 s se acaba
         transcurrido = time.perf_counter() - t_juego
@@ -86,6 +89,17 @@ if __name__ == '__main__':
             caras = nuevas_caras(1280, 720, n_caras)
             t_caras = time.perf_counter()
 
+        # Golpe: el recuadro del guante toca el recuadro (hitbox) de una cara y el guante va rápido.
+        # Basta con que se toquen un poco, no hace falta que el centro del guante caiga dentro
+        if recuadro is not None and guante.velocidad > VELOCIDAD_GOLPE:
+            gx, gy, gw, gh = recuadro
+            for cara in caras:
+                alto, ancho = PERSONAJES[cara['num']][0].shape[:2]
+                se_tocan = (gx < cara['x'] + ancho and cara['x'] < gx + gw and
+                            gy < cara['y'] + alto and cara['y'] < gy + gh)
+                if se_tocan:
+                    cara['golpeada'] = True
+
         # Pintamos cada cara: la golpeada si ya le han dado, la normal si no
         for cara in caras:
             buena, golpeada = PERSONAJES[cara['num']]
@@ -93,18 +107,28 @@ if __name__ == '__main__':
             pegar_png(frame, imagen, cara['x'], cara['y'])
 
         cv2.putText(frame, f'Tiempo: {DURACION_JUEGO - transcurrido:.0f}', (20, 50),
-        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+
+        # Guante: recuadro verde y su velocidad (en rojo cuando va lo bastante rápido para golpear)
+        if recuadro is not None:
+            x, y, w, h = recuadro
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.circle(frame, centro, 6, (0, 0, 255), -1)
+        color = (0, 0, 255) if guante.velocidad > VELOCIDAD_GOLPE else (255, 255, 255)
+        cv2.putText(frame, f'Velocidad: {guante.velocidad:.0f} px/s', (20, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
         cv2.imshow('Juego', frame)
-        tecla = cv2.waitKey(1) & 0xFF
-
-        if tecla == ord(' '):        # ESPACIO: caras y sitios nuevos
-            caras = nuevas_caras(1280, 720, n_caras)
-        elif tecla == 13:            # ENTER: las caras pasan a golpeadas
-            for cara in caras:
-                cara['golpeada'] = True
-        elif tecla == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):    # q: terminar la partida antes
             break
 
+    cv2.destroyWindow('Juego')       # cerramos solo la ventana del juego (la cámara sigue abierta)
+
+# Prueba: solo se ejecuta si lanzas este archivo
+if __name__ == '__main__':
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    jugar(cap)
     cap.release()
     cv2.destroyAllWindows()
