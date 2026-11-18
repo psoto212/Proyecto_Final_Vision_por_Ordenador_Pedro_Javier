@@ -3,7 +3,7 @@ import cv2
 import random
 from pathlib import Path
 from seguridad import pegar_png
-from deteccion_guante import Guante
+from deteccion_guante import Guante, actualizar_guantes
 import time
 import math
 
@@ -16,6 +16,9 @@ TIEMPO_FASE = 20     # cada 20 s sale una cara más (1, luego 2, luego 3)
 TIEMPO_CARAS = 1.5  # segundos que dura cada tanda de caras
 INTENTOS = 20       # colocaciones al azar que probamos para quedarnos con la más separada
 VELOCIDAD_GOLPE = 700  # px/s: el guante tiene que ir al menos así de rápido para que cuente como puñetazo
+
+TEXTO_PONERSE = 'PONTE LOS GUANTES!'  # frase de la cuenta atrás (cv2.putText no pinta tildes, ni la ñ, ni ¡ ¿)
+TIEMPO_PONERSE = 10                  # segundos de cuenta atrás antes de empezar la partida
 
 def cargar_cara(ruta):
     # Lee el PNG con transparencia y lo deja con ALTO_CARA de alto sin deformarlo
@@ -60,12 +63,50 @@ def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
 
     return mejor_caras
 
+def cuenta_atras(cap, guantes):
+    # Antes de jugar: TIEMPO_PONERSE segundos con el mensaje para ponerse los guantes y un número que baja.
+    # Devuelve False si se pulsa 'q' (no se juega)
+    t_inicio = time.perf_counter()
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            return False
+        frame = cv2.flip(frame, 1)
+
+        quedan = TIEMPO_PONERSE - (time.perf_counter() - t_inicio)
+        if quedan <= 0:
+            return True
+
+        # Recuadros de los guantes, para ver que los detecta bien antes de empezar
+        actualizar_guantes(frame, guantes)
+        for guante in guantes:
+            if guante.recuadro is not None:
+                x, y, w, h = guante.recuadro
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Mensaje y número de la cuenta atrás, centrados
+        letra = cv2.FONT_HERSHEY_SIMPLEX
+        (ancho, _), _ = cv2.getTextSize(TEXTO_PONERSE, letra, 2, 5)
+        cv2.putText(frame, TEXTO_PONERSE, ((1280 - ancho) // 2, 250), letra, 2, (0, 255, 255), 5)
+        numero = str(math.ceil(quedan))
+        (ancho, _), _ = cv2.getTextSize(numero, letra, 6, 12)
+        cv2.putText(frame, numero, ((1280 - ancho) // 2, 480), letra, 6, (255, 255, 255), 12)
+
+        cv2.imshow('Juego', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return False
+
+
 def jugar(cap):
     # Una partida entera (60 s) usando la cámara que ya está abierta
+    guantes = [Guante(), Guante()]
+    if not cuenta_atras(cap, guantes):
+        cv2.destroyWindow('Juego')
+        return
+
     t_juego = time.perf_counter()   # momento en que empieza la partida
     caras = nuevas_caras(1280, 720, 2)
     t_caras = time.perf_counter()   # momento en que salió la tanda actual
-    guante = Guante()
 
     while True:
         ret, frame = cap.read()
@@ -73,8 +114,8 @@ def jugar(cap):
             break
         frame = cv2.flip(frame, 1)
 
-        # Buscamos el guante ANTES de pintar las caras (si no, el azul de alguna foto podría confundirlo)
-        recuadro, centro, _ = guante.actualizar(frame)
+        # Buscamos los guantes ANTES de pintar las caras (si no, el azul de alguna foto podría confundirlo)
+        actualizar_guantes(frame, guantes)
 
         # Cuánto llevamos de partida; a los 60 s se acaba
         transcurrido = time.perf_counter() - t_juego
@@ -89,10 +130,12 @@ def jugar(cap):
             caras = nuevas_caras(1280, 720, n_caras)
             t_caras = time.perf_counter()
 
-        # Golpe: el recuadro del guante toca el recuadro (hitbox) de una cara y el guante va rápido.
+        # Golpe: el recuadro de un guante toca el recuadro (hitbox) de una cara y ese guante va rápido.
         # Basta con que se toquen un poco, no hace falta que el centro del guante caiga dentro
-        if recuadro is not None and guante.velocidad > VELOCIDAD_GOLPE:
-            gx, gy, gw, gh = recuadro
+        for guante in guantes:
+            if guante.recuadro is None or guante.velocidad <= VELOCIDAD_GOLPE:
+                continue
+            gx, gy, gw, gh = guante.recuadro
             for cara in caras:
                 alto, ancho = PERSONAJES[cara['num']][0].shape[:2]
                 se_tocan = (gx < cara['x'] + ancho and cara['x'] < gx + gw and
@@ -109,14 +152,15 @@ def jugar(cap):
         cv2.putText(frame, f'Tiempo: {DURACION_JUEGO - transcurrido:.0f}', (20, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
-        # Guante: recuadro verde y su velocidad (en rojo cuando va lo bastante rápido para golpear)
-        if recuadro is not None:
-            x, y, w, h = recuadro
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cv2.circle(frame, centro, 6, (0, 0, 255), -1)
-        color = (0, 0, 255) if guante.velocidad > VELOCIDAD_GOLPE else (255, 255, 255)
-        cv2.putText(frame, f'Velocidad: {guante.velocidad:.0f} px/s', (20, 100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+        # Guantes: recuadro verde y velocidad de cada uno (en rojo cuando va lo bastante rápido para golpear)
+        for i, guante in enumerate(guantes):
+            if guante.recuadro is not None:
+                x, y, w, h = guante.recuadro
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.circle(frame, guante.centro, 6, (0, 0, 255), -1)
+            color = (0, 0, 255) if guante.velocidad > VELOCIDAD_GOLPE else (255, 255, 255)
+            cv2.putText(frame, f'Guante {i + 1}: {guante.velocidad:.0f} px/s', (20, 100 + 40 * i),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
         cv2.imshow('Juego', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):    # q: terminar la partida antes
