@@ -6,6 +6,7 @@ from seguridad import pegar_png
 from deteccion_guante import Guante
 import time
 import math
+from rachas import Rachas, es_malo
 
 CARPETA_JUEGO = Path(__file__).resolve().parent / 'fotos_juego'
 ALTO_CARA = 200     # alto en píxeles de cada cara en pantalla
@@ -26,11 +27,14 @@ def cargar_cara(ruta):
 
 # Diccionario de personajes: número -> (cara normal, cara golpeada)
 PERSONAJES = {}
+TIPO_PERSONAJE = {}
 for i, ruta in enumerate(sorted((CARPETA_JUEGO / 'sin_fondo').glob('*.png'))):
     buena = cargar_cara(ruta)
     golpeada = cv2.imread(str(CARPETA_JUEGO / 'paliza' / ruta.name), cv2.IMREAD_UNCHANGED)
     golpeada = cv2.resize(golpeada, (buena.shape[1], buena.shape[0]), interpolation=cv2.INTER_AREA)
     PERSONAJES[i] = (buena, golpeada)
+    TIPO_PERSONAJE[i] = es_malo(ruta.stem)    
+    
 
 def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
     # Dividimos la pantalla en N_CARAS franjas (columnas), una para cada cara: así nunca se pisan
@@ -66,6 +70,7 @@ def jugar(cap):
     caras = nuevas_caras(1280, 720, 2)
     t_caras = time.perf_counter()   # momento en que salió la tanda actual
     guante = Guante()
+    rachas = Rachas()
 
     while True:
         ret, frame = cap.read()
@@ -118,11 +123,13 @@ def jugar(cap):
         cv2.putText(frame, f'Velocidad: {guante.velocidad:.0f} px/s', (20, 100),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
+        rachas.dibujar(frame)
         cv2.imshow('Juego', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):    # q: terminar la partida antes
             break
 
     cv2.destroyWindow('Juego')       # cerramos solo la ventana del juego (la cámara sigue abierta)
+
 
 # Prueba: solo se ejecuta si lanzas este archivo
 if __name__ == '__main__':
