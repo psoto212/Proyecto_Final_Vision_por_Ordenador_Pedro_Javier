@@ -8,7 +8,7 @@ import time
 import math
 from rachas import Rachas, es_malo
 
-CARPETA_JUEGO = Path(__file__).resolve().parent / 'fotos_juego'
+CARPETA_JUEGO = Path(__file__).resolve().parent / 'imagenes' / 'caras'
 ALTO_CARA = 200     # alto en píxeles de cada cara en pantalla
 
 DURACION_JUEGO = 60  # segundos que dura la partida

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 # Datos de la calibración (los guarda calibracion_camara.py, que se ejecuta antes, offline)
-CALIBRACION = Path(__file__).resolve().parent / 'calibracion.npz'
+CALIBRACION = Path(__file__).resolve().parent / 'calibracion' / 'calibracion.npz'
 
 
 class Camara:
