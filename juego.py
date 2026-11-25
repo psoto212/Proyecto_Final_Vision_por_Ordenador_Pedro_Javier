@@ -14,8 +14,8 @@ import math
 CARPETA_JUEGO = Path(__file__).resolve().parent / 'imagenes' / 'caras'
 ALTO_CARA = 200
 
-DURACION_JUEGO = 60
-TIEMPO_FASE = 20
+DURACION_JUEGO = 30
+TIEMPO_FASE = 10
 TIEMPO_CARAS = 1.5
 INTENTOS = 20
 VELOCIDAD_GOLPE = 700
@@ -23,6 +23,7 @@ VELOCIDAD_GOLPE = 700
 TEXTO_PONERSE = 'PONTE LOS GUANTES!'
 TIEMPO_PONERSE = 10
 
+ZONA_DESCANSO = (440, 300, 840, 720)   # x1, y1, x2, y2: aquí van las manos quietas y no sale ninguna cara
 
 def cargar_cara(ruta):
     png = cv2.imread(str(ruta), cv2.IMREAD_UNCHANGED)
@@ -77,7 +78,12 @@ def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
                 0, ancho_franja - ancho_cara
             )
 
-            y = random.randint(0, alto_pantalla - ALTO_CARA)
+            # Si la cara cae (en horizontal) encima de la zona de descanso, solo puede ir por encima de ella
+            zx1, zy1, zx2, zy2 = ZONA_DESCANSO
+            y_max = alto_pantalla - ALTO_CARA
+            if x < zx2 and x + ancho_cara > zx1:
+                y_max = zy1 - ALTO_CARA
+            y = random.randint(0, y_max)
 
             caras.append({
                 'num': num,
@@ -152,6 +158,9 @@ def cuenta_atras(cap, guantes):
             ((1280 - ancho) // 2, 480),
             letra, 6, (255, 255, 255), 12
         )
+
+        zx1, zy1, zx2, zy2 = ZONA_DESCANSO
+        cv2.rectangle(frame, (zx1, zy1), (zx2, zy2), (200, 200, 200), 2)
 
         cap.pintar_fps(frame)
         cv2.imshow('Juego', frame)
