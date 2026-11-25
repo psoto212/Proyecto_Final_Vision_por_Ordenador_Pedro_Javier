@@ -1,18 +1,31 @@
-"Programa principal: primero la seguridad y, al pulsar JUGAR, el juego"
+
+"Programa principal: seguridad, juego y pantalla final"
+
 import cv2
 from camara import Camara
 from seguridad import Contrasena, SECUENCIA, pantalla_seguridad
 from juego import jugar
+from fin_partida import fin_partida
+from record import cargar_record
 
-# La cámara ya da la imagen en espejo y cuenta los FPS (se pintan en cada pantalla)
 cap = Camara()
-
-# La contraseña se crea una sola vez: si la cambias, se mantiene entre partidas
 contra = Contrasena(SECUENCIA)
 
-# Seguridad -> (pulsas JUGAR) -> juego -> vuelta a seguridad ... hasta pulsar 'q' en seguridad
-while pantalla_seguridad(cap, contra):
-    jugar(cap)
+continuar = True
+
+while continuar and pantalla_seguridad(cap, contra):
+
+    while continuar:
+        puntos = jugar(cap)
+
+        if puntos is None:
+            continuar = False
+            break
+
+        record = cargar_record()
+
+        if not fin_partida(cap, puntos, record):
+            continuar = False
 
 cap.release()
 cv2.destroyAllWindows()
