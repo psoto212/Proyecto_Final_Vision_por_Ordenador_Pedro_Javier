@@ -3,7 +3,7 @@ import numpy as np
 import time
 import math
 
-AZUL_MIN = np.array([85, 40, 30], dtype=np.uint8)    # color azul del guante en HSV
+AZUL_MIN = np.array([85, 90, 30], dtype=np.uint8)    # color azul del guante en HSV
 AZUL_MAX = np.array([140, 255, 255], dtype=np.uint8)
 AREA_MIN = 1000      # manchas azules más pequeñas no cuentan como guante
 ALPHA = 0.5          # suavizado de la velocidad (más alto = reacciona antes, pero tiembla más)
