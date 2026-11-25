@@ -23,7 +23,7 @@ BOTON = (80, 400, 380, 560)   # x1, y1, x2, y2 del botón JUGAR (a la izquierda,
 TIEMPO_BOTON = 1              # segundos con la mano encima para pulsarlo
 
 # Imágenes de los candados (se cargan una sola vez al arrancar)
-CARPETA_ASSETS = Path(__file__).resolve().parent / 'assets'
+CARPETA_ASSETS = Path(__file__).resolve().parent / 'imagenes' / 'candados'
 
 
 def cargar_png(nombre, alto):
