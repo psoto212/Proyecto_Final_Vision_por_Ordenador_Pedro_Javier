@@ -1,11 +1,11 @@
 "Programa principal: primero la seguridad y, al pulsar JUGAR, el juego"
 import cv2
+from camara import Camara
 from seguridad import Contrasena, SECUENCIA, pantalla_seguridad
 from juego import jugar
 
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+# La cámara ya da la imagen en espejo y cuenta los FPS (se pintan en cada pantalla)
+cap = Camara()
 
 # La contraseña se crea una sola vez: si la cambias, se mantiene entre partidas
 contra = Contrasena(SECUENCIA)

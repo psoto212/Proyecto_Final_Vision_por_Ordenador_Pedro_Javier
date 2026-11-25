@@ -74,7 +74,6 @@ def cuenta_atras(cap, guantes):
         ret, frame = cap.read()
         if not ret:
             return False
-        frame = cv2.flip(frame, 1)
 
         quedan = TIEMPO_PONERSE - (time.perf_counter() - t_inicio)
         if quedan <= 0:
@@ -95,6 +94,7 @@ def cuenta_atras(cap, guantes):
         (ancho, _), _ = cv2.getTextSize(numero, letra, 6, 12)
         cv2.putText(frame, numero, ((1280 - ancho) // 2, 480), letra, 6, (255, 255, 255), 12)
 
+        cap.pintar_fps(frame)
         cv2.imshow('Juego', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             return False
@@ -116,7 +116,6 @@ def jugar(cap):
         ret, frame = cap.read()
         if not ret:
             break
-        frame = cv2.flip(frame, 1)
 
         # Buscamos los guantes ANTES de pintar las caras (si no, el azul de alguna foto podría confundirlo)
         actualizar_guantes(frame, guantes)
@@ -176,8 +175,9 @@ def jugar(cap):
             color = (0, 0, 255) if guante.velocidad > VELOCIDAD_GOLPE else (255, 255, 255)
             cv2.putText(frame, f'Guante {i + 1}: {guante.velocidad:.0f} px/s', (20, 100 + 40 * i),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-        
+
         rachas.dibujar(frame)
+        cap.pintar_fps(frame)
         cv2.imshow('Juego', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):    # q: terminar la partida antes
             break
@@ -186,9 +186,8 @@ def jugar(cap):
 
 # Prueba: solo se ejecuta si lanzas este archivo
 if __name__ == '__main__':
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    from camara import Camara
+    cap = Camara()
     jugar(cap)
     cap.release()
     cv2.destroyAllWindows()
