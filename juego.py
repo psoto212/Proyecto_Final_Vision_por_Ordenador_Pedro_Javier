@@ -320,6 +320,7 @@ def jugar(cap):
             break
 
     cv2.destroyWindow('Juego')
+    return rachas.puntuacion
 
 
 if __name__ == '__main__':
