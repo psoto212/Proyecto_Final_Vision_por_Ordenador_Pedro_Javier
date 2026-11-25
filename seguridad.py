@@ -212,7 +212,6 @@ def pantalla_seguridad(cap, contra):
         ok, frame = cap.read()
         if not ok:
             break
-        frame = cv2.flip(frame, 1)
 
         # Solo miramos dentro del recuadro
         trozo = frame[y1:y2, x1:x2]
@@ -297,6 +296,7 @@ def pantalla_seguridad(cap, contra):
         else:
             t_boton, clic = None, False         # con el candado cerrado, los clics no cuentan
 
+        cap.pintar_fps(frame)
         cv2.imshow('Seguridad', frame)
         cv2.imshow('Mascara recuadro', mascara)
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -308,8 +308,7 @@ def pantalla_seguridad(cap, contra):
 
 # Prueba: solo se ejecuta si lanzas este archivo (solo la pantalla de seguridad, sin juego)
 if __name__ == '__main__':
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    from camara import Camara
+    cap = Camara()
     print('JUGAR pulsado' if pantalla_seguridad(cap, Contrasena(SECUENCIA)) else 'Salir')
     cap.release()
