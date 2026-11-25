@@ -6,6 +6,7 @@ from seguridad import pegar_png
 from deteccion_guante import Guante, actualizar_guantes
 import time
 import math
+from rachas import Rachas, es_malo
 
 CARPETA_JUEGO = Path(__file__).resolve().parent / 'fotos_juego'
 ALTO_CARA = 200     # alto en píxeles de cada cara en pantalla
@@ -29,11 +30,13 @@ def cargar_cara(ruta):
 
 # Diccionario de personajes: número -> (cara normal, cara golpeada)
 PERSONAJES = {}
+TIPO_PERSONAJE = {}
 for i, ruta in enumerate(sorted((CARPETA_JUEGO / 'sin_fondo').glob('*.png'))):
     buena = cargar_cara(ruta)
     golpeada = cv2.imread(str(CARPETA_JUEGO / 'paliza' / ruta.name), cv2.IMREAD_UNCHANGED)
     golpeada = cv2.resize(golpeada, (buena.shape[1], buena.shape[0]), interpolation=cv2.INTER_AREA)
     PERSONAJES[i] = (buena, golpeada)
+    TIPO_PERSONAJE[i] = es_malo(ruta.stem)
 
 def nuevas_caras(ancho_pantalla, alto_pantalla, n_caras):
     # Dividimos la pantalla en N_CARAS franjas (columnas), una para cada cara: así nunca se pisan
@@ -100,6 +103,7 @@ def cuenta_atras(cap, guantes):
 def jugar(cap):
     # Una partida entera (60 s) usando la cámara que ya está abierta
     guantes = [Guante(), Guante()]
+    rachas = Rachas()
     if not cuenta_atras(cap, guantes):
         cv2.destroyWindow('Juego')
         return
@@ -127,6 +131,12 @@ def jugar(cap):
 
         # Si la tanda actual lleva 1,5 s en pantalla, sacamos caras nuevas
         if time.perf_counter() - t_caras >= TIEMPO_CARAS:
+
+            for cara in caras:
+                if TIPO_PERSONAJE[cara['num']] and not cara['golpeada']:
+                    rachas.reiniciar_racha()
+                    break
+
             caras = nuevas_caras(1280, 720, n_caras)
             t_caras = time.perf_counter()
 
@@ -140,8 +150,13 @@ def jugar(cap):
                 alto, ancho = PERSONAJES[cara['num']][0].shape[:2]
                 se_tocan = (gx < cara['x'] + ancho and cara['x'] < gx + gw and
                             gy < cara['y'] + alto and cara['y'] < gy + gh)
-                if se_tocan:
+                if se_tocan and not cara['golpeada']:
                     cara['golpeada'] = True
+
+                    if TIPO_PERSONAJE[cara['num']]:
+                        rachas.golpe_correcto()
+                    else:
+                        rachas.golpe_incorrecto()
 
         # Pintamos cada cara: la golpeada si ya le han dado, la normal si no
         for cara in caras:
@@ -161,7 +176,8 @@ def jugar(cap):
             color = (0, 0, 255) if guante.velocidad > VELOCIDAD_GOLPE else (255, 255, 255)
             cv2.putText(frame, f'Guante {i + 1}: {guante.velocidad:.0f} px/s', (20, 100 + 40 * i),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-
+        
+        rachas.dibujar(frame)
         cv2.imshow('Juego', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):    # q: terminar la partida antes
             break
